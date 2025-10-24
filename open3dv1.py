@@ -105,12 +105,15 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
     )
 
     # Add keyboard shortcut for confirmation
-    def on_key_press(key):
-        if key.lower() == 'n' or key == 'Return':  # 'n' for next or Enter
-            confirm_selection()
+    # Note: PyVista requires callback with no required parameters
+    def on_key_press_n():
+        confirm_selection()
 
-    plotter.add_key_event('n', on_key_press)
-    plotter.add_key_event('Return', on_key_press)
+    def on_key_press_enter():
+        confirm_selection()
+
+    plotter.add_key_event('n', on_key_press_n)
+    plotter.add_key_event('Return', on_key_press_enter)
 
     # Add instructions for keyboard shortcut
     plotter.add_text(
