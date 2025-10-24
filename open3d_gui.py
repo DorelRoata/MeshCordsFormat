@@ -11,6 +11,16 @@ class MeshAlignmentGUI:
         self.root.geometry("800x650")
         self.root.resizable(True, True)
 
+        # Center the window on screen
+        self.root.update_idletasks()
+        window_width = 800
+        window_height = 650
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
         # Variables
         self.input_file = tk.StringVar()
         self.output_file = tk.StringVar()

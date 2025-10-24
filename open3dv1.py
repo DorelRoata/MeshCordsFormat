@@ -100,62 +100,74 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         tolerance=0.025
     )
 
-    # Add proper button widget using PyVista's button API
-    def button_callback():
-        """Callback when button is clicked"""
-        confirm_selection()
-
-    # Create button widget - positioned at bottom center
+    # Add visual button text at bottom center
     plotter.add_text(
-        "CONFIRM & CONTINUE TO NEXT STEP",
+        "CLICK GREEN BUTTON TO CONTINUE",
         position='lower_edge',
-        font_size=13,
-        color='lime',
+        font_size=14,
+        color='yellow',
         font='arial'
     )
 
-    # Add button widget using PyVista's built-in button
-    # Position in bottom right: window is 1200x800, so position from bottom-left is (1200-50, 10)
+    # Add button widget using PyVista's button API
+    # Button positioned in bottom right corner
+    button_triggered = {'value': False}
+
+    def button_callback():
+        """Callback when button is clicked - must work correctly"""
+        if not button_triggered['value']:
+            button_triggered['value'] = True
+            print("\n>>> BUTTON CLICKED - Moving to next step...")
+            confirm_selection()
+
     try:
-        # This creates an actual clickable button widget in BOTTOM RIGHT
+        # Use button widget (simpler than checkbox, more reliable)
         plotter.add_checkbox_button_widget(
-            button_callback,
+            callback=button_callback,
             value=False,
-            position=(1150, 10),  # Bottom right corner (1200-50 pixels from left, 10 from bottom)
-            size=35,
-            border_size=4,
+            position=(1050, 15),  # Bottom right: 1050px from left, 15px from bottom
+            size=50,  # Much larger: 50x50 pixels
+            border_size=5,
             color_on='lime',
-            color_off='red',
-            background_color='white'
+            color_off='green',
+            background_color='darkgreen'
         )
 
-        # Add label next to checkbox (on its left side)
+        # Add clear label with arrow
         plotter.add_text(
-            "Click checkbox to continue ->",
-            position=(0.78, 0.02),
-            font_size=11,
-            color='white',
-            viewport=True
+            "NEXT STEP -->",
+            position=(0.72, 0.025),
+            font_size=14,
+            color='lime',
+            viewport=True,
+            font='arial'
         )
-    except Exception:
-        # If checkbox doesn't work, use text button with click detection in bottom right
+    except Exception as e:
+        print(f"Checkbox widget failed: {e}")
+        # Fallback: Large clickable area with text
         plotter.add_text(
-            "[Click HERE to Continue]",
-            position=(0.75, 0.02),
-            font_size=12,
-            color='yellow',
-            viewport=True
+            "[ CLICK HERE ]",
+            position=(0.80, 0.03),
+            font_size=16,
+            color='lime',
+            viewport=True,
+            font='arial'
         )
 
-        # Detect clicks in bottom RIGHT area
+        # Detect clicks in bottom right area - larger area
         def check_button_click(obj, event):
+            if button_triggered['value']:
+                return  # Already triggered
+
             click_pos = plotter.iren.interactor.GetEventPosition()
             window_size = plotter.ren_win.GetSize()
             x_norm = click_pos[0] / window_size[0]
             y_norm = click_pos[1] / window_size[1]
 
-            # Bottom RIGHT area: x > 0.75, y < 0.08
-            if x_norm > 0.75 and y_norm < 0.08:
+            # Bottom RIGHT area: x > 0.7, y < 0.1 (larger clickable area)
+            if x_norm > 0.7 and y_norm < 0.1:
+                button_triggered['value'] = True
+                print("\n>>> CLICK DETECTED - Moving to next step...")
                 confirm_selection()
 
         plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
