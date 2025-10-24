@@ -115,46 +115,47 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
     )
 
     # Add button widget using PyVista's built-in button
+    # Position in bottom right: window is 1200x800, so position from bottom-left is (1200-50, 10)
     try:
-        # This creates an actual clickable button widget
+        # This creates an actual clickable button widget in BOTTOM RIGHT
         plotter.add_checkbox_button_widget(
             button_callback,
             value=False,
-            position=(10, 10),
-            size=30,
-            border_size=3,
-            color_on='green',
+            position=(1150, 10),  # Bottom right corner (1200-50 pixels from left, 10 from bottom)
+            size=35,
+            border_size=4,
+            color_on='lime',
             color_off='red',
             background_color='white'
         )
 
-        # Add label next to checkbox
+        # Add label next to checkbox (on its left side)
         plotter.add_text(
-            "Check box when ready",
-            position=(0.02, 0.02),
+            "Click checkbox to continue ->",
+            position=(0.78, 0.02),
             font_size=11,
             color='white',
             viewport=True
         )
     except Exception:
-        # If checkbox doesn't work, use text button with click detection
+        # If checkbox doesn't work, use text button with click detection in bottom right
         plotter.add_text(
             "[Click HERE to Continue]",
-            position=(0.4, 0.02),
+            position=(0.75, 0.02),
             font_size=12,
             color='yellow',
             viewport=True
         )
 
-        # Detect clicks in bottom center area
+        # Detect clicks in bottom RIGHT area
         def check_button_click(obj, event):
             click_pos = plotter.iren.interactor.GetEventPosition()
             window_size = plotter.ren_win.GetSize()
             x_norm = click_pos[0] / window_size[0]
             y_norm = click_pos[1] / window_size[1]
 
-            # Bottom center area: x between 0.35-0.65, y < 0.08
-            if 0.35 < x_norm < 0.65 and y_norm < 0.08:
+            # Bottom RIGHT area: x > 0.75, y < 0.08
+            if x_norm > 0.75 and y_norm < 0.08:
                 confirm_selection()
 
         plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
