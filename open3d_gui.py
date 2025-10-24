@@ -281,18 +281,7 @@ class MeshAlignmentGUI:
         if self.downsample_enabled.get():
             cmd.extend(["--downsample", str(self.downsample_ratio.get())])
 
-        # Show info message
-        messagebox.showinfo(
-            "Starting Alignment",
-            "The alignment process will now start.\n\n"
-            "Follow the instructions in the console and 3D viewer windows.\n\n"
-            "You will need to select 3 points:\n"
-            "1. Origin point\n"
-            "2. Point along X-axis\n"
-            "3. Point along Y-axis"
-        )
-
-        # Run the command
+        # Run the command directly (no popup)
         try:
             # Minimize this window
             self.root.iconify()

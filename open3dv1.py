@@ -12,8 +12,11 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
     print("="*70)
     print("CONTROLS:")
     print("  - Click on the mesh to select a point")
-    print("  - Click 'Confirm & Next' button when ready")
-    print("  - Rotate: Left mouse button")
+    print("  - Click 'CONFIRM & NEXT' button (lower right) to continue")
+    print("  - Alternative: Press 'N' or ENTER key")
+    print("")
+    print("CAMERA CONTROLS:")
+    print("  - Rotate: Left mouse button + drag")
     print("  - Pan: Middle mouse button or Shift + Left mouse")
     print("  - Zoom: Mouse wheel or Right mouse button")
     print("="*70 + "\n")
@@ -87,14 +90,6 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         else:
             print("Please select a point first!")
 
-    # Add confirmation button
-    plotter.add_text(
-        "< Click here after selecting point >",
-        position='lower_right',
-        font_size=10,
-        color='orange'
-    )
-
     # Enable point picking with better visual feedback
     plotter.enable_point_picking(
         callback=callback,
@@ -105,8 +100,25 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         tolerance=0.025
     )
 
-    # Add keyboard shortcut for confirmation
-    # Note: PyVista requires callback with no required parameters
+    # Add a clickable button widget to confirm selection
+    plotter.add_text(
+        "   CONFIRM & NEXT   ",
+        position='lower_right',
+        font_size=14,
+        color='white',
+        font='arial'
+    )
+
+    # Add button background indicator
+    plotter.add_text(
+        "Click button above to continue ->",
+        position=(0.68, 0.08),
+        font_size=10,
+        color='yellow',
+        viewport=True
+    )
+
+    # Add keyboard shortcuts as backup (they work, just maybe not obvious)
     def on_key_press_n():
         confirm_selection()
 
@@ -116,13 +128,26 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
     plotter.add_key_event('n', on_key_press_n)
     plotter.add_key_event('Return', on_key_press_enter)
 
-    # Add instructions for keyboard shortcut
-    plotter.add_text(
-        "Press 'N' or ENTER to confirm",
-        position='lower_edge',
-        font_size=11,
-        color='green'
-    )
+    # Since PyVista doesn't have easy button widgets, we'll use a timer to check mouse clicks
+    # in the button area
+    button_clicked = {'value': False}
+
+    def check_button_click(obj, event):
+        """Check if user clicked in the button area"""
+        # Get click position
+        click_pos = plotter.iren.interactor.GetEventPosition()
+        window_size = plotter.ren_win.GetSize()
+
+        # Convert to normalized coordinates (0-1)
+        x_norm = click_pos[0] / window_size[0]
+        y_norm = click_pos[1] / window_size[1]
+
+        # Button area is in lower right: roughly x > 0.7, y < 0.15
+        if x_norm > 0.7 and y_norm < 0.15:
+            confirm_selection()
+
+    # Add click event listener
+    plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
 
     # Try to center the window before showing
     try:
