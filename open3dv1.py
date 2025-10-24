@@ -63,7 +63,7 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
             plotter.remove_actor(sphere_actor)
 
         # Add sphere at picked point for visual feedback
-        sphere = pv.Sphere(radius=mesh.length * 0.01, center=picked_point)
+        sphere = pv.Sphere(radius=mesh.length * 0.005, center=picked_point)
         sphere_actor = plotter.add_mesh(sphere, color='orangered', opacity=1.0)
 
         # Add coordinate text in bottom left with better formatting
@@ -74,8 +74,8 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         coord_text_actor = plotter.add_text(
             coord_text,
             position='lower_left',
-            font_size=11,
-            color='white',
+            font_size=6,
+            color='black',
             font='courier'
         )
 
@@ -95,76 +95,129 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         show_message=False,  # Disable default message to avoid overlap
         color='red',
         point_size=25,
-        use_mesh=True,
         tolerance=0.025
     )
 
-    # Create a proper button widget with text BELOW the 3D viewport
+    # Create a proper button widget
     button_triggered = {'value': False}
 
-    def button_callback():
-        """Callback when button is clicked"""
-        if not button_triggered['value']:
-            button_triggered['value'] = True
-            print("\n>>> CONFIRM BUTTON CLICKED - Advancing to next step...")
-            confirm_selection()
+    # Create a 2D box in the lower part of the screen to act as a button
+    # We'll use a plane positioned in screen coordinates
+    import vtk
 
-    # Add a large button-style text widget at bottom center
-    # This creates a visual button below the 3D view
-    button_text = plotter.add_text(
-        "  CONFIRM & CONTINUE  ",
-        position=(0.35, 0.05),  # Centered horizontally, with padding from bottom
-        font_size=16,
-        color='white',
-        viewport=True,
-        font='arial'
-    )
+    # Create button representation using a 2D rectangle
+    button_actor = vtk.vtkActor2D()
+    button_mapper = vtk.vtkPolyDataMapper2D()
 
-    # Add background/border effect with additional text
-    plotter.add_text(
-        "━━━━━━━━━━━━━━━━━━━━━━━━",
-        position=(0.34, 0.04),
-        font_size=14,
-        color='royalblue',
-        viewport=True
-    )
+    # Create a rectangle for the button
+    points = vtk.vtkPoints()
+    points.SetNumberOfPoints(4)
+    # Position in pixel coordinates (will be in lower center)
+    # These will be set dynamically based on window size
 
-    plotter.add_text(
-        "━━━━━━━━━━━━━━━━━━━━━━━━",
-        position=(0.34, 0.09),
-        font_size=14,
-        color='royalblue',
-        viewport=True
-    )
+    polygon = vtk.vtkPolygon()
+    polygon.GetPointIds().SetNumberOfIds(4)
+    for i in range(4):
+        polygon.GetPointIds().SetId(i, i)
 
-    # Add instruction text above button
-    plotter.add_text(
-        "After selecting a point:",
-        position=(0.38, 0.11),
-        font_size=10,
-        color='lightgray',
-        viewport=True
-    )
+    polygons = vtk.vtkCellArray()
+    polygons.InsertNextCell(polygon)
 
-    # Detect clicks in the button area
-    def check_button_click(obj, event):
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+    polydata.SetPolys(polygons)
+
+    button_mapper.SetInputData(polydata)
+    button_actor.SetMapper(button_mapper)
+    button_actor.GetProperty().SetColor(0.18, 0.55, 0.34)  # Green color (RGB)
+
+    # Update button position based on window size
+    def update_button_position():
+        render_window = plotter.render_window
+        if render_window:
+            width, height = render_window.GetSize()
+            # Center the button horizontally, place near bottom
+            btn_width = 300
+            btn_height = 60
+            x_start = (width - btn_width) // 2
+            y_start = 30
+
+            points.SetPoint(0, x_start, y_start, 0)
+            points.SetPoint(1, x_start + btn_width, y_start, 0)
+            points.SetPoint(2, x_start + btn_width, y_start + btn_height, 0)
+            points.SetPoint(3, x_start, y_start + btn_height, 0)
+            points.Modified()
+
+    # Add the button actor to renderer
+    plotter.renderer.AddActor2D(button_actor)
+
+    # Add text on top of button
+    button_text_actor = vtk.vtkTextActor()
+    button_text_actor.SetInput("CONFIRM & CONTINUE")
+    button_text_actor.GetTextProperty().SetFontSize(18)
+    button_text_actor.GetTextProperty().SetColor(1.0, 1.0, 1.0)  # White
+    button_text_actor.GetTextProperty().SetBold(True)
+    button_text_actor.GetTextProperty().SetJustificationToCentered()
+    button_text_actor.GetTextProperty().SetVerticalJustificationToCentered()
+
+    def update_button_text_position():
+        render_window = plotter.render_window
+        if render_window:
+            width, height = render_window.GetSize()
+            btn_width = 300
+            btn_height = 60
+            x_start = (width - btn_width) // 2
+            y_start = 30
+            # Center the text in the button
+            button_text_actor.SetPosition(x_start + btn_width // 2, y_start + btn_height // 2)
+
+    plotter.renderer.AddActor2D(button_text_actor)
+
+    # Update positions initially
+    update_button_position()
+    update_button_text_position()
+
+    # Click detection
+    def check_button_click(iren, event_name):
         if button_triggered['value']:
-            return  # Already triggered
+            return
 
-        click_pos = plotter.iren.interactor.GetEventPosition()
-        window_size = plotter.ren_win.GetSize()
-        x_norm = click_pos[0] / window_size[0]
-        y_norm = click_pos[1] / window_size[1]
+        click_pos = iren.GetEventPosition()
+        window_size = iren.GetRenderWindow().GetSize()
 
-        # Button area: center-bottom (0.34 < x < 0.66, 0.04 < y < 0.10)
-        if 0.34 < x_norm < 0.66 and 0.04 < y_norm < 0.10:
+        # Button bounds (center horizontally, near bottom)
+        btn_width = 300
+        btn_height = 60
+        x_start = (window_size[0] - btn_width) // 2
+        y_start = 30
+
+        if (x_start <= click_pos[0] <= x_start + btn_width and
+            y_start <= click_pos[1] <= y_start + btn_height):
+
+            if selected_point['point'] is None:
+                print("Please select a point first!")
+                return
+
             button_triggered['value'] = True
-            # Change button appearance to show it was clicked
-            button_text.SetText(2, "  ✓ CONFIRMED  ")
+
+            # Change button color to darker green
+            button_actor.GetProperty().SetColor(0.1, 0.37, 0.2)
+
+            # Change text
+            button_text_actor.SetInput("✓ CONFIRMED")
+            button_text_actor.GetTextProperty().SetColor(0.7, 1.0, 0.7)
+
+            iren.GetRenderWindow().Render()
             print("\n>>> BUTTON CLICKED - Moving to next step...")
-            # Small delay to show feedback, then confirm
-            plotter.iren.interactor.GetRenderWindow().Render()
-            confirm_selection()
+            selected_point['confirmed'] = True
+
+            # Close the plotter
+            import time
+            time.sleep(0.1)
+            try:
+                iren.TerminateApp()
+            except:
+                plotter.close()
 
     plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
 
@@ -185,7 +238,6 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         root.withdraw()
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
-        root.destroy()
 
         # Calculate centered position
         window_width = 1200
@@ -193,15 +245,23 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         x = max(0, (screen_width - window_width) // 2)
         y = max(0, (screen_height - window_height) // 2)
 
+        # Properly destroy Tkinter root
+        root.quit()
+        root.destroy()
+        del root
+
         # Set window position before showing (if render window exists)
         if hasattr(plotter, 'ren_win') and plotter.ren_win:
             plotter.ren_win.SetPosition(x, y)
-    except Exception:
+    except Exception as e:
         # If centering fails, just continue (window will appear at default position)
+        print(f"[DEBUG] Window centering failed: {e}")
         pass
 
     # Show the plotter
+    print(f"[DEBUG] Opening window for: {prompt[:50]}...")
     plotter.show()
+    print(f"[DEBUG] Window closed")
 
     # Validate that a point was selected and confirmed
     if not selected_point['confirmed'] or selected_point['point'] is None:
