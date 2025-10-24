@@ -2,6 +2,7 @@ import trimesh
 import pyvista as pv
 import numpy as np
 import sys
+import tkinter as tk
 
 def pick_points(geom, prompt, instruction_text=None, step_info=""):
     print("\n" + "="*70)
@@ -123,8 +124,27 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         color='green'
     )
 
-    # Center the window on screen
-    plotter.window_position = 'center'
+    # Try to center the window before showing
+    try:
+        # Get screen dimensions
+        root = tk.Tk()
+        root.withdraw()
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        root.destroy()
+
+        # Calculate centered position
+        window_width = 1200
+        window_height = 800
+        x = max(0, (screen_width - window_width) // 2)
+        y = max(0, (screen_height - window_height) // 2)
+
+        # Set window position before showing (if render window exists)
+        if hasattr(plotter, 'ren_win') and plotter.ren_win:
+            plotter.ren_win.SetPosition(x, y)
+    except Exception:
+        # If centering fails, just continue (window will appear at default position)
+        pass
 
     # Show the plotter
     plotter.show()
