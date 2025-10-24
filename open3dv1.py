@@ -31,16 +31,16 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
     else:
         mesh = pv.PolyData(np.asarray(geom.vertices))
 
-    plotter.add_mesh(mesh, color='lightblue', opacity=0.8, lighting=True)
+    plotter.add_mesh(mesh, color='lightgray', opacity=0.9, lighting=True)
 
     # Add title at the top with better formatting
     title_text = f"{step_info}\n{prompt}"
-    plotter.add_text(title_text, position='upper_edge', font_size=14, color='black', font='arial')
+    plotter.add_text(title_text, position='upper_edge', font_size=15, color='navy', font='arial')
 
     # Add instruction box in upper right (separate from title)
     if instruction_text:
         instruction_box = f"{instruction_text}\n\nClick on mesh to select point"
-        plotter.add_text(instruction_box, position='upper_right', font_size=11, color='darkblue', font='arial')
+        plotter.add_text(instruction_box, position='upper_right', font_size=11, color='darkslategray', font='arial')
 
     # Add coordinate axes for reference
     plotter.add_axes(interactive=True, line_width=3, cone_radius=0.4)
@@ -64,18 +64,17 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
 
         # Add sphere at picked point for visual feedback
         sphere = pv.Sphere(radius=mesh.length * 0.01, center=picked_point)
-        sphere_actor = plotter.add_mesh(sphere, color='red', opacity=1.0)
+        sphere_actor = plotter.add_mesh(sphere, color='orangered', opacity=1.0)
 
         # Add coordinate text in bottom left with better formatting
-        coord_text = (f"SELECTED COORDINATES:\n"
+        coord_text = (f"SELECTED POINT:\n"
                      f"X: {picked_point[0]:10.3f}\n"
                      f"Y: {picked_point[1]:10.3f}\n"
-                     f"Z: {picked_point[2]:10.3f}\n\n"
-                     f"Click 'Confirm & Next' button below")
+                     f"Z: {picked_point[2]:10.3f}")
         coord_text_actor = plotter.add_text(
             coord_text,
             position='lower_left',
-            font_size=12,
+            font_size=11,
             color='white',
             font='courier'
         )
@@ -100,77 +99,74 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         tolerance=0.025
     )
 
-    # Add visual button text at bottom center
-    plotter.add_text(
-        "CLICK GREEN BUTTON TO CONTINUE",
-        position='lower_edge',
-        font_size=14,
-        color='yellow',
-        font='arial'
-    )
-
-    # Add button widget using PyVista's button API
-    # Button positioned in bottom right corner
+    # Create a proper button widget with text BELOW the 3D viewport
     button_triggered = {'value': False}
 
     def button_callback():
-        """Callback when button is clicked - must work correctly"""
+        """Callback when button is clicked"""
         if not button_triggered['value']:
             button_triggered['value'] = True
-            print("\n>>> BUTTON CLICKED - Moving to next step...")
+            print("\n>>> CONFIRM BUTTON CLICKED - Advancing to next step...")
             confirm_selection()
 
-    try:
-        # Use button widget (simpler than checkbox, more reliable)
-        plotter.add_checkbox_button_widget(
-            callback=button_callback,
-            value=False,
-            position=(1050, 15),  # Bottom right: 1050px from left, 15px from bottom
-            size=50,  # Much larger: 50x50 pixels
-            border_size=5,
-            color_on='lime',
-            color_off='green',
-            background_color='darkgreen'
-        )
+    # Add a large button-style text widget at bottom center
+    # This creates a visual button below the 3D view
+    button_text = plotter.add_text(
+        "  CONFIRM & CONTINUE  ",
+        position=(0.35, 0.05),  # Centered horizontally, with padding from bottom
+        font_size=16,
+        color='white',
+        viewport=True,
+        font='arial'
+    )
 
-        # Add clear label with arrow
-        plotter.add_text(
-            "NEXT STEP -->",
-            position=(0.72, 0.025),
-            font_size=14,
-            color='lime',
-            viewport=True,
-            font='arial'
-        )
-    except Exception as e:
-        print(f"Checkbox widget failed: {e}")
-        # Fallback: Large clickable area with text
-        plotter.add_text(
-            "[ CLICK HERE ]",
-            position=(0.80, 0.03),
-            font_size=16,
-            color='lime',
-            viewport=True,
-            font='arial'
-        )
+    # Add background/border effect with additional text
+    plotter.add_text(
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        position=(0.34, 0.04),
+        font_size=14,
+        color='royalblue',
+        viewport=True
+    )
 
-        # Detect clicks in bottom right area - larger area
-        def check_button_click(obj, event):
-            if button_triggered['value']:
-                return  # Already triggered
+    plotter.add_text(
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        position=(0.34, 0.09),
+        font_size=14,
+        color='royalblue',
+        viewport=True
+    )
 
-            click_pos = plotter.iren.interactor.GetEventPosition()
-            window_size = plotter.ren_win.GetSize()
-            x_norm = click_pos[0] / window_size[0]
-            y_norm = click_pos[1] / window_size[1]
+    # Add instruction text above button
+    plotter.add_text(
+        "After selecting a point:",
+        position=(0.38, 0.11),
+        font_size=10,
+        color='lightgray',
+        viewport=True
+    )
 
-            # Bottom RIGHT area: x > 0.7, y < 0.1 (larger clickable area)
-            if x_norm > 0.7 and y_norm < 0.1:
-                button_triggered['value'] = True
-                print("\n>>> CLICK DETECTED - Moving to next step...")
-                confirm_selection()
+    # Detect clicks in the button area
+    def check_button_click(obj, event):
+        if button_triggered['value']:
+            return  # Already triggered
 
-        plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
+        click_pos = plotter.iren.interactor.GetEventPosition()
+        window_size = plotter.ren_win.GetSize()
+        x_norm = click_pos[0] / window_size[0]
+        y_norm = click_pos[1] / window_size[1]
+
+        # Button area: center-bottom (0.34 < x < 0.66, 0.04 < y < 0.10)
+        if 0.34 < x_norm < 0.66 and 0.04 < y_norm < 0.10:
+            button_triggered['value'] = True
+            # Change button appearance to show it was clicked
+            button_text.SetText(2, "  ✓ CONFIRMED  ")
+            print("\n>>> BUTTON CLICKED - Moving to next step...")
+            # Small delay to show feedback, then confirm
+            plotter.iren.interactor.GetRenderWindow().Render()
+            confirm_selection()
+
+    plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
 
     # Add keyboard shortcuts as alternative
     def on_key_press_n():
