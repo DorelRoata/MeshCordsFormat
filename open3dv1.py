@@ -100,25 +100,66 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
         tolerance=0.025
     )
 
-    # Add a clickable button widget to confirm selection
+    # Add proper button widget using PyVista's button API
+    def button_callback():
+        """Callback when button is clicked"""
+        confirm_selection()
+
+    # Create button widget - positioned at bottom center
     plotter.add_text(
-        "   CONFIRM & NEXT   ",
-        position='lower_right',
-        font_size=14,
-        color='white',
+        "CONFIRM & CONTINUE TO NEXT STEP",
+        position='lower_edge',
+        font_size=13,
+        color='lime',
         font='arial'
     )
 
-    # Add button background indicator
-    plotter.add_text(
-        "Click button above to continue ->",
-        position=(0.68, 0.08),
-        font_size=10,
-        color='yellow',
-        viewport=True
-    )
+    # Add button widget using PyVista's built-in button
+    try:
+        # This creates an actual clickable button widget
+        plotter.add_checkbox_button_widget(
+            button_callback,
+            value=False,
+            position=(10, 10),
+            size=30,
+            border_size=3,
+            color_on='green',
+            color_off='red',
+            background_color='white'
+        )
 
-    # Add keyboard shortcuts as backup (they work, just maybe not obvious)
+        # Add label next to checkbox
+        plotter.add_text(
+            "Check box when ready",
+            position=(0.02, 0.02),
+            font_size=11,
+            color='white',
+            viewport=True
+        )
+    except Exception:
+        # If checkbox doesn't work, use text button with click detection
+        plotter.add_text(
+            "[Click HERE to Continue]",
+            position=(0.4, 0.02),
+            font_size=12,
+            color='yellow',
+            viewport=True
+        )
+
+        # Detect clicks in bottom center area
+        def check_button_click(obj, event):
+            click_pos = plotter.iren.interactor.GetEventPosition()
+            window_size = plotter.ren_win.GetSize()
+            x_norm = click_pos[0] / window_size[0]
+            y_norm = click_pos[1] / window_size[1]
+
+            # Bottom center area: x between 0.35-0.65, y < 0.08
+            if 0.35 < x_norm < 0.65 and y_norm < 0.08:
+                confirm_selection()
+
+        plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
+
+    # Add keyboard shortcuts as alternative
     def on_key_press_n():
         confirm_selection()
 
@@ -127,27 +168,6 @@ def pick_points(geom, prompt, instruction_text=None, step_info=""):
 
     plotter.add_key_event('n', on_key_press_n)
     plotter.add_key_event('Return', on_key_press_enter)
-
-    # Since PyVista doesn't have easy button widgets, we'll use a timer to check mouse clicks
-    # in the button area
-    button_clicked = {'value': False}
-
-    def check_button_click(obj, event):
-        """Check if user clicked in the button area"""
-        # Get click position
-        click_pos = plotter.iren.interactor.GetEventPosition()
-        window_size = plotter.ren_win.GetSize()
-
-        # Convert to normalized coordinates (0-1)
-        x_norm = click_pos[0] / window_size[0]
-        y_norm = click_pos[1] / window_size[1]
-
-        # Button area is in lower right: roughly x > 0.7, y < 0.15
-        if x_norm > 0.7 and y_norm < 0.15:
-            confirm_selection()
-
-    # Add click event listener
-    plotter.iren.add_observer('LeftButtonPressEvent', check_button_click)
 
     # Try to center the window before showing
     try:
