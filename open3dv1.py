@@ -3,7 +3,7 @@ import pyvista as pv
 import numpy as np
 import sys
 
-def pick_points(geom, prompt, instruction_text=None):
+def pick_points(geom, prompt, instruction_text=None, step_info=""):
     print("\n" + "="*70)
     print(prompt)
     if instruction_text:
@@ -11,72 +11,192 @@ def pick_points(geom, prompt, instruction_text=None):
     print("="*70)
     print("CONTROLS:")
     print("  - Click on the mesh to select a point")
-    print("  - Press 'p' to confirm your selection")
-    print("  - Press 'q' to close the window")
+    print("  - Click 'Confirm & Next' button when ready")
+    print("  - Rotate: Left mouse button")
+    print("  - Pan: Middle mouse button or Shift + Left mouse")
+    print("  - Zoom: Mouse wheel or Right mouse button")
     print("="*70 + "\n")
 
-    plotter = pv.Plotter()
+    # Create plotter with window position centered
+    plotter = pv.Plotter(window_size=[1200, 800])
+
+    # Convert geometry to PyVista format
     if isinstance(geom, trimesh.Trimesh):
-        # Convert trimesh faces to pyvista format
         faces = np.column_stack([np.full(len(geom.faces), 3), geom.faces]).flatten()
         mesh = pv.PolyData(np.asarray(geom.vertices), faces=faces)
     else:
         mesh = pv.PolyData(np.asarray(geom.vertices))
 
-    plotter.add_mesh(mesh, color='lightblue', opacity=0.8)
+    plotter.add_mesh(mesh, color='lightblue', opacity=0.8, lighting=True)
 
-    # Add text instructions to the 3D window
+    # Add title at the top with better formatting
+    title_text = f"{step_info}\n{prompt}"
+    plotter.add_text(title_text, position='upper_edge', font_size=14, color='black', font='arial')
+
+    # Add instruction box in upper right (separate from title)
     if instruction_text:
-        plotter.add_text(instruction_text, position='upper_left', font_size=10, color='black')
+        instruction_box = f"{instruction_text}\n\nClick on mesh to select point"
+        plotter.add_text(instruction_box, position='upper_right', font_size=11, color='darkblue', font='arial')
 
     # Add coordinate axes for reference
-    plotter.add_axes(interactive=True)
+    plotter.add_axes(interactive=True, line_width=3, cone_radius=0.4)
 
-    # Callback to display picked point coordinates
-    selected_point = {'point': None}
-    text_actor = None
+    # State tracking
+    selected_point = {'point': None, 'confirmed': False}
+    coord_text_actor = None
+    sphere_actor = None
 
     def callback(picked_point):
-        nonlocal text_actor
+        nonlocal coord_text_actor, sphere_actor
         selected_point['point'] = picked_point
-        coord_text = f"Selected Point:\nX: {picked_point[0]:.3f}\nY: {picked_point[1]:.3f}\nZ: {picked_point[2]:.3f}"
 
-        # Remove old text if exists
-        if text_actor is not None:
-            plotter.remove_actor(text_actor)
+        # Remove old coordinate text if exists
+        if coord_text_actor is not None:
+            plotter.remove_actor(coord_text_actor)
 
-        # Add new text with coordinates
-        text_actor = plotter.add_text(coord_text, position='lower_left', font_size=12, color='red')
+        # Remove old sphere marker if exists
+        if sphere_actor is not None:
+            plotter.remove_actor(sphere_actor)
+
+        # Add sphere at picked point for visual feedback
+        sphere = pv.Sphere(radius=mesh.length * 0.01, center=picked_point)
+        sphere_actor = plotter.add_mesh(sphere, color='red', opacity=1.0)
+
+        # Add coordinate text in bottom left with better formatting
+        coord_text = (f"SELECTED COORDINATES:\n"
+                     f"X: {picked_point[0]:10.3f}\n"
+                     f"Y: {picked_point[1]:10.3f}\n"
+                     f"Z: {picked_point[2]:10.3f}\n\n"
+                     f"Click 'Confirm & Next' button below")
+        coord_text_actor = plotter.add_text(
+            coord_text,
+            position='lower_left',
+            font_size=12,
+            color='white',
+            font='courier'
+        )
+
         print(f"Point selected: X={picked_point[0]:.3f}, Y={picked_point[1]:.3f}, Z={picked_point[2]:.3f}")
 
-    plotter.enable_point_picking(callback=callback, show_message=True, color='red', point_size=20)
+    # Button callback to confirm selection
+    def confirm_selection():
+        if selected_point['point'] is not None:
+            selected_point['confirmed'] = True
+            plotter.close()
+        else:
+            print("Please select a point first!")
+
+    # Add confirmation button
+    plotter.add_text(
+        "< Click here after selecting point >",
+        position='lower_right',
+        font_size=10,
+        color='orange'
+    )
+
+    # Enable point picking with better visual feedback
+    plotter.enable_point_picking(
+        callback=callback,
+        show_message=False,  # Disable default message to avoid overlap
+        color='red',
+        point_size=25,
+        use_mesh=True,
+        tolerance=0.025
+    )
+
+    # Add keyboard shortcut for confirmation
+    def on_key_press(key):
+        if key.lower() == 'n' or key == 'Return':  # 'n' for next or Enter
+            confirm_selection()
+
+    plotter.add_key_event('n', on_key_press)
+    plotter.add_key_event('Return', on_key_press)
+
+    # Add instructions for keyboard shortcut
+    plotter.add_text(
+        "Press 'N' or ENTER to confirm",
+        position='lower_edge',
+        font_size=11,
+        color='green'
+    )
+
+    # Center the window on screen
+    plotter.window_position = 'center'
+
+    # Show the plotter
     plotter.show()
 
-    if plotter.picked_point is None or len(plotter.picked_point) == 0:
-        raise ValueError("No point selected.")
+    # Validate that a point was selected and confirmed
+    if not selected_point['confirmed'] or selected_point['point'] is None:
+        raise ValueError("No point selected or selection not confirmed.")
 
-    print(f"Final selection: X={plotter.picked_point[0]:.3f}, Y={plotter.picked_point[1]:.3f}, Z={plotter.picked_point[2]:.3f}\n")
-    return plotter.picked_point
+    final_point = selected_point['point']
+    print(f"CONFIRMED: X={final_point[0]:.3f}, Y={final_point[1]:.3f}, Z={final_point[2]:.3f}\n")
+
+    return final_point
 
 def downsample_mesh(mesh, target_ratio=0.5, preserve_edges=True):
     print("Downsampling mesh...")
     if isinstance(mesh, trimesh.Trimesh):
-        # Simplify with quadric decimation
         target_faces = int(len(mesh.faces) * target_ratio)
         print(f"  Original faces: {len(mesh.faces)}")
         print(f"  Target faces: {target_faces}")
-        simplified = mesh.simplify_quadric_decimation(target_faces)
-        print(f"  Simplified faces: {len(simplified.faces)}")
-        return simplified
+
+        # Try multiple downsampling methods in order of preference
+        try:
+            # Method 1: Quadric decimation (requires fast_simplification)
+            simplified = mesh.simplify_quadric_decimation(target_faces)
+            print(f"  Simplified faces: {len(simplified.faces)}")
+            print("  Method: Quadric decimation")
+            return simplified
+        except (ImportError, ModuleNotFoundError) as e:
+            print(f"  [INFO] Quadric decimation unavailable: {e}")
+            print("  [INFO] Falling back to vertex clustering method...")
+
+            # Method 2: Vertex clustering (built-in, no dependencies)
+            try:
+                # Calculate appropriate voxel size based on mesh bounds and target ratio
+                bounds = mesh.bounds
+                diagonal = np.linalg.norm(bounds[1] - bounds[0])
+                # Estimate voxel size to achieve target face count
+                voxel_size = diagonal * (1.0 - target_ratio) * 0.1
+                simplified = mesh.simplify_vertex_clustering(voxel_size=voxel_size)
+                print(f"  Simplified faces: {len(simplified.faces)}")
+                print(f"  Method: Vertex clustering (voxel_size={voxel_size:.4f})")
+                return simplified
+            except Exception as e2:
+                print(f"  [WARNING] Vertex clustering failed: {e2}")
+                print("  [WARNING] Returning original mesh without downsampling")
+                return mesh
+        except Exception as e:
+            print(f"  [WARNING] Downsampling failed: {e}")
+            print("  [WARNING] Returning original mesh without downsampling")
+            return mesh
     else:
         # Point cloud: voxel downsample
-        cloud = pv.PolyData(mesh.vertices)
-        downsampled = cloud.sample(voxel_size=0.01)
-        return trimesh.PointCloud(downsampled.points)
+        try:
+            cloud = pv.PolyData(mesh.vertices)
+            downsampled = cloud.sample(voxel_size=0.01)
+            return trimesh.PointCloud(downsampled.points)
+        except Exception as e:
+            print(f"  [WARNING] Point cloud downsampling failed: {e}")
+            return mesh
 
 def main(input_file, output_file, downsample=False, target_ratio=0.5, output_format=None):
     # Supported formats by trimesh
     SUPPORTED_FORMATS = ['stl', 'stl_ascii', 'ply', 'obj', 'off', 'glb', 'gltf', 'dae']
+
+    # Check for optional dependencies if downsampling is enabled
+    if downsample:
+        try:
+            import fast_simplification
+        except ImportError:
+            print("\n" + "="*70)
+            print("[INFO] Optional dependency 'fast_simplification' not found")
+            print("       Using built-in vertex clustering method instead")
+            print("       For better quality downsampling, install with:")
+            print("       pip install fast-simplification")
+            print("="*70 + "\n")
 
     # Load geometry
     geom = trimesh.load(input_file)
@@ -119,16 +239,19 @@ def main(input_file, output_file, downsample=False, target_ratio=0.5, output_for
     print("#"*70 + "\n")
 
     origin = pick_points(geom,
-                        "STEP 1/3: Select the ORIGIN point",
-                        "Origin Point (0,0,0)\nThis is your reference point")
+                        "Select the ORIGIN point",
+                        "Origin Point (0,0,0)\nThis is your reference point",
+                        step_info="STEP 1 of 3")
 
     x_point = pick_points(geom,
-                         "STEP 2/3: Select a point along POSITIVE X direction",
-                         "X-Axis Direction\nPick a point from origin\nalong desired +X axis")
+                         "Select a point along POSITIVE X direction",
+                         "X-Axis Direction\nPick a point from origin\nalong desired +X axis",
+                         step_info="STEP 2 of 3")
 
     y_point = pick_points(geom,
-                         "STEP 3/3: Select a point along POSITIVE Y direction",
-                         "Y-Axis Direction\nPick a point perpendicular to X\nalong desired +Y axis")
+                         "Select a point along POSITIVE Y direction",
+                         "Y-Axis Direction\nPick a point perpendicular to X\nalong desired +Y axis",
+                         step_info="STEP 3 of 3")
    
     # Compute transformation
     print("\n" + "="*70)
